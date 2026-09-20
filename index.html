@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#173d32">
+<title>RV Drive-Time Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1e9;color:#1d2924}
+header{padding:14px 16px;background:#173d32;color:#fff}header h1{font-size:21px;margin:0}header p{margin:4px 0 0;font-size:13px;opacity:.82}
+.controls{padding:12px;background:#fff;display:grid;grid-template-columns:1fr 120px auto;gap:8px;box-shadow:0 2px 8px #0002;position:relative;z-index:1000}
+input,select,button{font:inherit;border:1px solid #bbc5bf;border-radius:9px;padding:11px;min-width:0}
+button{background:#c87532;color:#fff;border:0;font-weight:700}
+#map{height:calc(100vh - 137px);min-height:450px}
+.status{position:absolute;z-index:900;bottom:24px;left:12px;right:12px;background:#fffffff2;padding:9px 12px;border-radius:9px;box-shadow:0 2px 10px #0003;font-size:13px;max-width:650px}
+@media(max-width:650px){.controls{grid-template-columns:1fr 105px}.controls button{grid-column:1/3}#map{height:calc(100vh - 184px)}}
+</style>
+</head>
+<body>
+<header><h1>RV Drive-Time Map</h1><p>See how far you can realistically travel by road.</p></header>
+<div class="controls">
+<input id="place" aria-label="Starting location" placeholder="Town, address, campground…" value="Stanton, Texas">
+<select id="hours" aria-label="Drive time">
+<option value="60">1 hour</option><option value="120">2 hours</option><option value="180">3 hours</option>
+<option value="240" selected>4 hours</option><option value="300">5 hours</option><option value="360">6 hours</option><option value="480">8 hours</option>
+</select>
+<button id="go">Show drive area</button>
+</div>
+<div id="map"></div><div class="status" id="status">Enter a starting place and drive time.</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map=L.map('map').setView([32.13,-101.79],6);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+let marker,area; const status=document.getElementById('status');
+async function geocode(q){
+ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{Accept:'application/json'}});
+ if(!r.ok) throw Error('Place search failed');
+ const d=await r.json(); if(!d.length) throw Error('Place not found');
+ return {lat:+d[0].lat,lon:+d[0].lon,name:d[0].display_name};
+}
+async function isochrone(lat,lon,min){
+ const body={locations:[{lat,lon}],costing:'auto',contours:[{time:min}],polygons:true,denoise:1,generalize:200};
+ const r=await fetch('https://valhalla1.openstreetmap.de/isochrone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!r.ok) throw Error('Drive-time service is busy ('+r.status+')');
+ return r.json();
+}
+async function run(){
+ const q=document.getElementById('place').value.trim(),min=+document.getElementById('hours').value;
+ if(!q)return; status.textContent='Finding '+q+'…';
+ try{
+  const p=await geocode(q); status.textContent='Calculating the '+(min/60)+'-hour road area…';
+  const gj=await isochrone(p.lat,p.lon,min);
+  if(marker)map.removeLayer(marker); if(area)map.removeLayer(area);
+  marker=L.marker([p.lat,p.lon]).addTo(map).bindPopup('<b>Start</b><br>'+p.name);
+  area=L.geoJSON(gj,{style:{color:'#a85720',weight:2,fillColor:'#d78b4d',fillOpacity:.25}}).addTo(map);
+  map.fitBounds(area.getBounds(),{padding:[20,20]});
+  status.textContent=(min/60)+'-hour road drive area from '+p.name+'. Planning estimate only; RV clearance restrictions are not included yet.';
+ }catch(e){status.textContent=e.message+'. Try again in a moment or choose another place.'}
+}
+document.getElementById('go').onclick=run;
+document.getElementById('place').addEventListener('keydown',e=>{if(e.key==='Enter')run()});
+</script>
+</body></html>
