@@ -365,43 +365,32 @@ function authHeaders(){
 
 async function geocode(q){
 
- const headers=authHeaders();
-
  const url=
-  'https://api.traveltimeapp.com/v4/geocoding/search'
-  +'?limit=1&query='+encodeURIComponent(q);
+  'https://nominatim.openstreetmap.org/search'
+  +'?format=json'
+  +'&limit=1'
+  +'&q='+encodeURIComponent(q);
 
- const r=await fetch(url,{headers});
-
- let data=null;
-
- try{
-  data=await r.json();
- }catch(e){}
+ const r=await fetch(url,{
+  headers:{
+   'Accept':'application/json'
+  }
+ });
 
  if(!r.ok){
-
-  if(r.status===401) openSetup();
-
-  throw Error(
-   data?.description ||
-   'Location search failed ('+r.status+')'
-  );
-
+  throw Error('Location search failed ('+r.status+')');
  }
 
- if(!data?.features?.length){
+ const data=await r.json();
 
+ if(!data.length){
   throw Error('Location not found');
-
  }
-
- const f=data.features[0];
 
  return{
-  lon:f.geometry.coordinates[0],
-  lat:f.geometry.coordinates[1],
-  name:f.properties?.label || q
+  lat:Number(data[0].lat),
+  lon:Number(data[0].lon),
+  name:data[0].display_name || q
  };
 
 }
