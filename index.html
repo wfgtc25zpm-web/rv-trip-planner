@@ -40,10 +40,21 @@ async function geocode(q){
  return {lat:+d[0].lat,lon:+d[0].lon,name:d[0].display_name};
 }
 async function isochrone(lat,lon,min){
- const body={locations:[{lat,lon}],costing:'auto',contours:[{time:min}],polygons:true,denoise:1,generalize:200};
+
+ const capped=Math.min(min,100);
+
+ const body={locations:[{lat,lon}],costing:'auto',contours:[{time:capped}],polygons:true,denoise:1,generalize:200};
+
  const r=await fetch('https://valhalla1.openstreetmap.de/isochrone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
- if(!r.ok) throw Error('Drive-time service is busy ('+r.status+')');
- return r.json();
+
+ if(!r.ok) throw Error('Drive-time service error ('+r.status+')');
+
+ const data=await r.json();
+
+ if(min>100) data._limited=true;
+
+ return data;
+
 }
 async function run(){
  const q=document.getElementById('place').value.trim(),min=+document.getElementById('hours').value;
